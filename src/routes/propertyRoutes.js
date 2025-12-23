@@ -10,7 +10,7 @@ const {
 const { checkRole } = require("../middlewares/roleMiddleware");
 
 const router = express.Router();
-const allowedRoles = ["SuperAdmin", "Developer"];
+const allowedRoles = ["SuperAdmin", "Developer", "Assistant"];
 router.post(
   "/create-property",
   verifyToken,
