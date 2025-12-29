@@ -27,7 +27,7 @@ const PropertySchema = new mongoose.Schema(
       required: true,
     },
     brokerCompany: {
-      type: String,
+      type: [String],
       required: true,
     },
     description: {

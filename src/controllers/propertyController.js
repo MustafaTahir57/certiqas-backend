@@ -1,22 +1,24 @@
 const uploadToIPFS = require("../helpers/ipfsUpload");
 const ethers = require("ethers");
 const uploadMetadataToIPFS = require("../helpers/uploadMetadata");
-const { mintCertificate } = require("../helpers/blockchain");
 const Properties = require("../models/Property");
+const { mintCertificate } = require("../helpers/blockchain");
+const User = require("../models/User");
 
 const createProperty = async (req, res) => {
   try {
     const role = req.user.role;
-
     const imageFile = req.files?.image?.[0];
     const otherFile = req.files?.file?.[0];
 
-    if (!imageFile || !otherFile) {
+    if (!imageFile) {
       return res.status(400).json({
-        message: "Image and File both are required",
+        success: false,
+        message: "Image is required",
       });
     }
-    const {
+
+    let {
       reraPermit,
       propertyId,
       developerName,
@@ -29,29 +31,28 @@ const createProperty = async (req, res) => {
       bathrooms,
       areaSqFt,
     } = req.body;
-
-    const duplicate = await Properties.findOne({
-      $or: [{ propertyId }],
-    });
-
+    if (!Array.isArray(brokerCompany)) {
+      brokerCompany = [brokerCompany];
+    }
+    const brokerCompanyString = brokerCompany.join(",");
+    const duplicate = await Properties.findOne({ propertyId });
     if (duplicate) {
       return res.status(400).json({
         success: false,
-        message:
-          " propertyId must be unique.",
+        message: "Property ID must be unique",
       });
     }
-
     const uploadedImage = await uploadToIPFS(
       imageFile.buffer,
       imageFile.originalname
     );
-
-    const uploadedFile = await uploadToIPFS(
-      otherFile.buffer,
-      otherFile.originalname
-    );
-
+    let uploadedFile = null;
+    if (otherFile) {
+      uploadedFile = await uploadToIPFS(
+        otherFile.buffer,
+        otherFile.originalname
+      );
+    }
     const verificationDate = Math.floor(Date.now() / 1000) - 40;
     const verificationHash = ethers.keccak256(
       ethers.solidityPacked(
@@ -72,23 +73,22 @@ const createProperty = async (req, res) => {
           projectName,
           location,
           unitType,
-          brokerCompany,
+          brokerCompanyString,
           verificationDate,
         ]
       )
     );
-
     const metadataTemplate = {
       name: "Certiqas",
       description,
       image: `ipfs://${uploadedImage.cid}`,
-      file: `ipfs://${uploadedFile.cid}`,
+      ...(uploadedFile && { file: `ipfs://${uploadedFile.cid}` }),
       attributes: [
         { trait_type: "Property ID", value: propertyId },
         { trait_type: "Developer Name", value: developerName },
         { trait_type: "Project Name", value: projectName },
         { trait_type: "Location", value: location },
-        { trait_type: "Broker Company", value: brokerCompany },
+        { trait_type: "Broker Company", value: brokerCompanyString },
         {
           trait_type: "Verification Date",
           display_type: "date",
@@ -96,19 +96,16 @@ const createProperty = async (req, res) => {
         },
         { trait_type: "Verification Hash", value: verificationHash },
         { trait_type: "RERA Permit", value: reraPermit },
-        { trait_type: "Description", value: description },
         { trait_type: "Unit Type", value: unitType },
         { trait_type: "Bedrooms", value: bedrooms || "N/A" },
         { trait_type: "Bathrooms", value: bathrooms || "N/A" },
         { trait_type: "Area (Sq Ft)", value: areaSqFt || "N/A" },
       ],
     };
-
     const metadataUploadURL = await uploadMetadataToIPFS(metadataTemplate);
 
     let mintingStatus = "pending";
     let mintTransactionHash = null;
-
     if (role === "SuperAdmin") {
       const listingId = Math.random()
         .toString(36)
@@ -122,7 +119,7 @@ const createProperty = async (req, res) => {
         projectName,
         location,
         unitType,
-        brokerCompany,
+        brokerCompany: brokerCompanyString,
         listingId,
         verificationDate,
         verificationHash,
@@ -139,8 +136,9 @@ const createProperty = async (req, res) => {
     const property = await Properties.create({
       imageCid: uploadedImage.cid,
       imageUrl: uploadedImage.url,
-      fileCid: uploadedFile.cid,
-      fileUrl: uploadedFile.url,
+
+      fileCid: uploadedFile?.cid || null,
+      fileUrl: uploadedFile?.url || null,
 
       reraPermit,
       propertyId,
@@ -150,19 +148,20 @@ const createProperty = async (req, res) => {
       unitType,
       brokerCompany,
       description,
-
       verificationDate,
       verificationHash,
       tokenUri: metadataUploadURL,
       expiresAt: 0,
+
       bedrooms,
       bathrooms,
       areaSqFt,
+
       mintingStatus,
       mintTransactionHash,
     });
 
-    res.json({
+    return res.status(201).json({
       success: true,
       message:
         role === "SuperAdmin"
@@ -171,6 +170,7 @@ const createProperty = async (req, res) => {
       property,
     });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -181,9 +181,9 @@ const createProperty = async (req, res) => {
 const mintPendingProperty = async (req, res) => {
   try {
     const { status } = req.body;
-
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({
+        success: false,
         message: "Invalid status. Allowed values: approved, rejected",
       });
     }
@@ -191,11 +191,14 @@ const mintPendingProperty = async (req, res) => {
     const property = await Properties.findById(req.params.id);
 
     if (!property) {
-      return res.status(404).json({ message: "Property not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
     }
-
     if (property.mintingStatus !== "pending") {
       return res.status(400).json({
+        success: false,
         message: `Property already ${property.mintingStatus}`,
       });
     }
@@ -211,6 +214,10 @@ const mintPendingProperty = async (req, res) => {
       });
     }
 
+    const brokerCompanyString = Array.isArray(property.brokerCompany)
+      ? property.brokerCompany.join(",")
+      : property.brokerCompany;
+
     const mintPayload = {
       reraPermit: property.reraPermit,
       propertyId: property.propertyId,
@@ -218,7 +225,7 @@ const mintPendingProperty = async (req, res) => {
       projectName: property.projectName,
       location: property.location,
       unitType: property.unitType,
-      brokerCompany: property.brokerCompany,
+      brokerCompany: brokerCompanyString, // ✅ FIXED
       listingId: Math.random().toString(36).substring(2, 8).toUpperCase(),
       verificationDate: property.verificationDate,
       verificationHash: property.verificationHash,
@@ -233,12 +240,13 @@ const mintPendingProperty = async (req, res) => {
 
     await property.save();
 
-    res.json({
+    return res.json({
       success: true,
       message: "Property approved & minted successfully!",
       property,
     });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -246,21 +254,32 @@ const mintPendingProperty = async (req, res) => {
   }
 };
 
-
 const getAllProperties = async (req, res) => {
   try {
     const { status } = req.query;
+    const userId = req.user.userId || req.user.id;
+    const userRole = req.user.role;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     const filter = {};
     if (status) {
       if (!["approved", "pending", "rejected"].includes(status)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid status. Allowed values: approved, pending, rejected",
+          message:
+            "Invalid status. Allowed values: approved, pending, rejected",
         });
       }
-
       filter.mintingStatus = status;
+    }
+    if (["Developer", "Assistant"].includes(userRole)) {
+      filter.developerName = user.companyName;
     }
 
     const properties = await Properties.find(filter).sort({
@@ -279,7 +298,6 @@ const getAllProperties = async (req, res) => {
     });
   }
 };
-
 
 const getPropertyById = async (req, res) => {
   try {
