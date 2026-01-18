@@ -7,15 +7,19 @@ dotenv.config();
 const createSuperAdmin = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log("Database connected");
-    // const existing = await User.findOne({ role: "SuperAdmin" });
+    console.log("✅ Database connected");
 
-    // if (existing) {
-    //   console.log("⚠️ SuperAdmin already exists!");
-    //   process.exit(0);
-    // }
+    // ✅ Check if email already exists
+    const existingUser = await User.findOne({
+      email: process.env.SUPERADMIN_EMAIL,
+    });
 
-    // Create SuperAdmin
+    if (existingUser) {
+      console.log("⚠️ User with this email already exists!");
+      process.exit(0);
+    }
+
+    // ✅ Create SuperAdmin
     await User.create({
       name: "Super Admin",
       email: process.env.SUPERADMIN_EMAIL,
