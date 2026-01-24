@@ -11,31 +11,29 @@ jobs:
 
     env:
       PM2_PROCESS_NAME: certiqas-backend-Stg
-      NODE_VERSION: 22
-      DEPLOY_PATH: /home/ubuntu/certiqas-backend-stg
+      node-version: 22
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
         with:
-          path: certiqas-backend-stg
-          clean: true
+          clean: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ env.node-version }}
 
       - name: Install dependencies
-        working-directory: ${{ env.DEPLOY_PATH }}
         run: npm install --legacy-peer-deps
 
       - name: Start or Reload the Application
-        working-directory: ${{ env.DEPLOY_PATH }}
         run: |
           if pm2 list | grep -q "$PM2_PROCESS_NAME"; then
+            echo "Process $PM2_PROCESS_NAME exists. Reloading..."
             pm2 reload "$PM2_PROCESS_NAME"
           else
-            pm2 start npm --name "$PM2_PROCESS_NAME" -- start
+            echo "Process $PM2_PROCESS_NAME does not exist. Starting..."
+            pm2 start "npm start" --name "$PM2_PROCESS_NAME"
           fi
           pm2 save
