@@ -2,38 +2,18 @@ const { ethers } = require("ethers");
 const { contractAbi } = require("../contract ");
 require("dotenv").config();
 
-let provider;
-let wallet;
-let contract;
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KYE, provider);
 
-// Initialize blockchain components on demand
-const initializeBlockchain = () => {
-  try {
-    if (!provider) {
-      provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
-    }
-    if (!wallet) {
-      wallet = new ethers.Wallet(process.env.PRIVATE_KYE, provider);
-    }
-    if (!contract) {
-      contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS,
-        contractAbi,
-        wallet
-      );
-    }
-    return { provider, wallet, contract };
-  } catch (err) {
-    console.error("Blockchain initialization error:", err.message);
-    throw new Error("Failed to initialize blockchain components: " + err.message);
-  }
-};
+const contract = new ethers.Contract(
+  process.env.CONTRACT_ADDRESS,
+  contractAbi,
+  wallet
+);
 
 const mintCertificate = async (data) => {
   try {
-    const { contract: contractInstance } = initializeBlockchain();
-
-    const tx = await contractInstance.mintCertificate(
+    const tx = await contract.mintCertificate(
       process.env.WALLET_ADDRESS,
       data.reraPermit,
       data.propertyId,
