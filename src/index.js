@@ -4,6 +4,7 @@ const connectDB = require("./config/db");
 const adminRoutes = require("./routes/adminRoutes");
 const propertyRoutes = require("./routes/propertyRoutes");
 const brokerRoutes = require("./routes/brokerRoutes");
+const emailRoutes = require("./routes/emailRoutes");
 const cors = require("cors");
 const app = express();
 app.use(express.json());
@@ -14,6 +15,7 @@ connectDB();
 app.use("/api/admin", adminRoutes);
 app.use("/api/properties", propertyRoutes );
 app.use("/api/broker", brokerRoutes);
+app.use("/api", emailRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).send("OK");
