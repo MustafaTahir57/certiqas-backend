@@ -13,7 +13,7 @@ const initializeBlockchain = () => {
       provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
     }
     if (!wallet) {
-      wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+      wallet = new ethers.Wallet(process.env.PRIVATE_KYE, provider);
     }
     if (!contract) {
       contract = new ethers.Contract(
